@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shepard Tone - Infinite Ascending Pitch Illusion</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/addons/p5.sound.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            text-align: center;
+            max-width: 800px;
+        }
+        
+        h1 {
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        .description {
+            margin-bottom: 20px;
+            line-height: 1.6;
+            color: #ccc;
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            text-align: left;
+        }
+        
+        #p5-container {
+            margin: 20px 0;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Shepard Tone Generator</h1>
+        <div class="description">
+            <p>The Shepard Tone is an auditory illusion that creates the perception of a continuously ascending pitch that never actually gets higher. It's achieved by using multiple sine waves that cycle through octaves with carefully controlled amplitude envelopes.</p>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" onclick="startAudio()">Click to Start Audio</button>
+            <button id="stopBtn" onclick="stopAudio()" disabled>Stop Audio</button>
+        </div>
+        
+        <div id="p5-container"></div>
+        
+        <div class="info">
+            <h3>How it works:</h3>
+            <ul>
+                <li><strong>Major triad harmony</strong> - Root, major third, and perfect fifth playing together</li>
+                <li><strong>6 octaves per chord tone</strong> - 18 total oscillators creating rich harmonic content</li>
+                <li><strong>Base frequency:</strong> 110Hz (A2 note)</li>
+                <li><strong>Fast chord steps:</strong> Each chord holds for 1/4 second before stepping up chromatically</li>
+                <li><strong>Color-coded visualization:</strong> Green (root), Blue (third), Orange (fifth)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Shepard Tone Example in p5.js
+        // Requires p5.sound library
+
+        let numOctaves = 6;      // number of octaves to span
+        let baseFreq = 110;      // base frequency (A2 ~ 110Hz)
+        let chordIntervals = [0, 4, 7]; // major triad: root, major third, perfect fifth
+        let tones = [];          // will hold [chord][octave] oscillators
+        let stepDuration = 15;   // frames per chord step (at 60fps = 0.25 seconds)
+        let currentStep = 0;     // current semitone step (0-11)
+        let stepCounter = 0;     // frame counter for timing
+        let isPlaying = false;
+        let audioStarted = false;
+
+        function setup() {
+            // Create canvas and attach it to the container
+            let canvas = createCanvas(600, 300);
+            canvas.parent('p5-container');
+            
+            noFill();
+            textAlign(CENTER, CENTER);
+            
+            // Initialize oscillators - one for each chord tone in each octave
+            for (let chordIndex = 0; chordIndex < chordIntervals.length; chordIndex++) {
+                tones[chordIndex] = [];
+                for (let octave = 0; octave < numOctaves; octave++) {
+                    let osc = new p5.Oscillator('sine');
+                    tones[chordIndex].push(osc);
+                }
+            }
+        }
+
+        function draw() {
+            background(30);
+            
+            // Draw title and status
+            fill(255);
+            textSize(20);
+            text("Shepard Tone Visualization", width/2, 40);
+            
+            // Show current status
+            textSize(14);
+            if (!audioStarted) {
+                fill(255, 100, 100);
+                text("Click 'Start Audio' button to begin", width/2, 70);
+            } else if (isPlaying) {
+                fill(100, 255, 100);
+                text("Audio Playing - Discrete Ascending Chord Steps Active", width/2, 70);
+            } else {
+                fill(255, 255, 100);
+                text("Audio Stopped", width/2, 70);
+            }
+
+            if (isPlaying) {
+                // Update step timing
+                stepCounter++;
+                if (stepCounter >= stepDuration) {
+                    stepCounter = 0;
+                    currentStep = (currentStep + 1) % 12; // cycle through 12 semitones
+                }
+                
+                let semitone = currentStep;
+                
+                // Update oscillator frequencies and amplitudes for each chord tone
+                for (let chordIndex = 0; chordIndex < chordIntervals.length; chordIndex++) {
+                    for (let octave = 0; octave < numOctaves; octave++) {
+                        // Calculate frequency for this chord tone and octave
+                        // Keep chord intervals within the same octave to avoid jumps
+                        let chordSemitone = (semitone + chordIntervals[chordIndex]) % 12;
+                        let octaveMultiplier = Math.pow(2, octave);
+                        let freq = baseFreq * octaveMultiplier * Math.pow(2, chordSemitone / 12);
+                        tones[chordIndex][octave].freq(freq);
+                        
+                        // Calculate amplitude using bell curve centered on middle octaves
+                        let octavePosition = octave / (numOctaves - 1); // 0 to 1
+                        let amp = Math.exp(-Math.pow((octavePosition - 0.5) / 0.35, 2));
+                        
+                        // Apply fade in/out based on octave position
+                        let fadeAmp = 1;
+                        
+                        // Smoother octave-based fading
+                        if (octave >= numOctaves - 2) {
+                            fadeAmp *= 0.3; // reduce high frequencies
+                        }
+                        
+                        if (octave <= 1) {
+                            fadeAmp *= 0.5; // reduce low frequencies
+                        }
+                        
+                        // Add slight attack/decay envelope for discrete feel
+                        let stepProgress = stepCounter / stepDuration;
+                        let envelope = 1;
+                        if (stepProgress < 0.1) {
+                            envelope = stepProgress / 0.1; // quick attack
+                        } else if (stepProgress > 0.9) {
+                            envelope = (1 - stepProgress) / 0.1; // quick decay
+                        }
+                        
+                        // Reduce volume per chord tone to prevent clipping
+                        let chordVolume = 0.25 / chordIntervals.length;
+                        tones[chordIndex][octave].amp(amp * fadeAmp * envelope * chordVolume);
+                    }
+                }
+                
+                // Visual representation
+                stroke(100, 255, 100);
+                strokeWeight(2);
+                
+                let centerY = height/2 + 20;
+                let waveWidth = width - 40;
+                
+                // Draw frequency bars for each chord tone
+                let chordColors = [
+                    [100, 255, 100], // root - green
+                    [100, 150, 255], // third - blue
+                    [255, 150, 100]  // fifth - orange
+                ];
+                
+                noStroke();
+                let totalBars = numOctaves * chordIntervals.length;
+                let barWidth = waveWidth / totalBars;
+                
+                for (let chordIndex = 0; chordIndex < chordIntervals.length; chordIndex++) {
+                    let color = chordColors[chordIndex];
+                    fill(color[0], color[1], color[2], 150);
+                    
+                    for (let octave = 0; octave < numOctaves; octave++) {
+                        let chordSemitone = (semitone + chordIntervals[chordIndex]) % 12;
+                        let octaveMultiplier = Math.pow(2, octave);
+                        let freq = baseFreq * octaveMultiplier * Math.pow(2, chordSemitone / 12);
+                        
+                        let octavePosition = octave / (numOctaves - 1);
+                        let amp = Math.exp(-Math.pow((octavePosition - 0.5) / 0.3, 2));
+                        
+                        let fadeAmp = 1;
+                        
+                        if (octave >= numOctaves - 2) {
+                            fadeAmp *= 0.3;
+                        }
+                        if (octave <= 1) {
+                            fadeAmp *= 0.5;
+                        }
+                        
+                        let totalAmp = amp * fadeAmp;
+                        let barHeight = totalAmp * 80;
+                        let barIndex = chordIndex * numOctaves + octave;
+                        let x = 20 + barIndex * barWidth;
+                        let y = height - 40 - barHeight;
+                        
+                        rect(x, y, barWidth - 1, barHeight);
+                        
+                        // Show frequency value for every other bar to avoid clutter
+                        if (barIndex % 2 === 0) {
+                            fill(255);
+                            textSize(8);
+                            text(freq.toFixed(0), x + barWidth/2, height - 15);
+                            fill(color[0], color[1], color[2], 150);
+                        }
+                    }
+                }
+            }
+            
+            // Draw pitch indicator
+            if (isPlaying) {
+                stroke(255, 200, 100);
+                strokeWeight(3);
+                let indicatorX = 20 + (currentStep / 12) * (width - 40);
+                line(indicatorX, height - 60, indicatorX, height - 40);
+                
+                // Show timing progress
+                let progressWidth = (stepCounter / stepDuration) * (width - 40);
+                stroke(255, 200, 100, 100);
+                strokeWeight(2);
+                line(20, height - 50, 20 + progressWidth, height - 50);
+                
+                fill(255, 200, 100);
+                textSize(12);
+                let stepProgress = stepCounter / stepDuration;
+                text("Step: " + currentStep + " | Progress: " + (stepProgress * 100).toFixed(0) + "%", width/2, height - 10);
+            }
+        }
+
+        function mousePressed() {
+            // Required in browsers to start sound
+            if (!audioStarted) {
+                startAudio();
+            }
+        }
+
+        // Global functions for button controls
+        function startAudio() {
+            if (!audioStarted) {
+                userStartAudio().then(() => {
+                    audioStarted = true;
+                    isPlaying = true;
+                    
+                    // Start all oscillators
+                    for (let chordIndex = 0; chordIndex < chordIntervals.length; chordIndex++) {
+                        for (let octave = 0; octave < numOctaves; octave++) {
+                            tones[chordIndex][octave].start();
+                        }
+                    }
+                    
+                    // Update button states
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                });
+            } else if (!isPlaying) {
+                isPlaying = true;
+                
+                // Start all oscillators
+                for (let chordIndex = 0; chordIndex < chordIntervals.length; chordIndex++) {
+                    for (let octave = 0; octave < numOctaves; octave++) {
+                        tones[chordIndex][octave].start();
+                    }
+                }
+                
+                // Update button states
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+            }
+        }
+
+        function stopAudio() {
+            if (isPlaying) {
+                isPlaying = false;
+                
+                // Stop all oscillators
+                for (let chordIndex = 0; chordIndex < chordIntervals.length; chordIndex++) {
+                    for (let octave = 0; octave < numOctaves; octave++) {
+                        tones[chordIndex][octave].stop();
+                    }
+                }
+                
+                // Update button states
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+
+        // Handle page visibility changes to pause audio when tab is not active
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && isPlaying) {
+                // Optionally pause when tab is hidden
+                // stopAudio();
+            }
+        });
+    </script>
+</body>
+</html>
